@@ -696,19 +696,14 @@ struct CollectiveMma<
   /// mcast_mask_b - tma multicast mask for B
   /// mcast_mask_sfa - tma multicast mask for SFA
   /// mcast_mask_sfb - tma multicast mask for SFB
-
-  // oren: This makes load_init a template function.
   template <class ProblemShape_MNKL>
-  // oren: This means the function runs on the GPU device.
   CUTLASS_DEVICE auto
   load_init(
-      // oren: The function receives the GEMM problem size and the shared-memory storage object. 
       ProblemShape_MNKL const& problem_shape_MNKL,
       TensorStorage& shared_tensors) const {
     using X = Underscore;
 
     // Separate out problem shape for convenience
-    // oren: unpacks the problem shape into M, N, K, and L.
     auto [M,N,K,L] = problem_shape_MNKL;
 
     // Represent the full tensors -- get these from TMA
@@ -813,14 +808,10 @@ struct CollectiveMma<
     TensorStorage& shared_tensors) const {
 
     // Allocate "fragments/descriptors" for A and B matrices
-    // oren: sA   = shared-memory tensor for A
     Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.begin()), SmemLayoutA{});  // (BLK_M,BLK_K,PIPE)
     Tensor sB = make_tensor(make_smem_ptr(shared_tensors.smem_B.begin()), SmemLayoutB{});  // (BLK_N,BLK_K,PIPE)
 
     // Allocate "fragments/descriptors" for A and B matrices
-    // oren: tCrA = A as viewed/partitioned for the MMA instruction #
-    // oren : So tCrA is more like an SMEM descriptor/fragment iterator 
-    // that tells UMMA where A lives in shared memory.#
     Tensor tCrA = TiledMma::make_fragment_A(sA);                                           // (MMA,MMA_M,MMA_K,PIPE)
     Tensor tCrB = TiledMma::make_fragment_B(sB);                                           // (MMA,MMA_N,MMA_K,PIPE)
 
@@ -907,12 +898,6 @@ struct CollectiveMma<
 
     // Issue the Mainloop loads
     CUTLASS_PRAGMA_NO_UNROLL
-    // Oren comment:
-    // for each K tile:
-    // TMA copy A
-    // TMA copy B
-    // TMA copy SFA
-    // TMA copy SFB
     while (k_tile_count > 0) {
       // LOCK mainloop_pipe_producer_state for _writing_
       mainloop_pipeline.producer_acquire(mainloop_pipe_producer_state, barrier_token);
@@ -1059,13 +1044,6 @@ struct CollectiveMma<
     }
 
     CUTLASS_PRAGMA_NO_UNROLL
-    // Oren:
-    // for each loaded K tile:
-    // wait until A/B/SFA/SFB are ready
-    // move scale factors SFA/SFB to TMEM
-    // for each UMMA k_block inside the tile:
-    // accumulators += A_block * B_block using SFA/SFB
-
     while (k_tile_count > 0) {
       // WAIT on mainloop_pipe_consumer_state until its data are available
       // (phase bit flips from mainloop_pipe_consumer_state.phase() value)
@@ -1128,8 +1106,3 @@ protected:
 } // namespace cutlass::gemm::collective
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Oren :
-// collective_mainloop.load()  -> loads A/B/SFA/SFB over K
-// collective_mainloop.mma()   -> multiplies A/B over K and accumulates
